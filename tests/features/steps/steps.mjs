@@ -123,7 +123,7 @@ Then("the comparison table shows the price {string} for that product", async fun
 
 // ---- Missing metric omission ----------------------------------------------
 
-When("the crawler did not find a {string} value on the page", async function () {
+When("the crawler did not find a {string} value on the page", async function (_metric) {
   // Fact about the fixture page; asserted in the following step.
 });
 
