@@ -10,6 +10,30 @@ const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 
 const FETCH_TIMEOUT_MS = Number(process.env.CRAWL_TIMEOUT_MS ?? 12_000);
 
+/** Browser-like request headers. Many retailers (e.g. MediaMarkt) reject
+ *  requests whose User-Agent advertises a bot with a 403, so we present a
+ *  realistic desktop-browser fingerprint. This is standard, publicly-served
+ *  product-page HTML — we honour redirects and per-request timeouts and never
+ *  attempt to defeat JavaScript challenges. */
+export function browserHeaders(referer?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+  };
+  if (referer) headers.Referer = referer;
+  return headers;
+}
+
 /** Hosts that are served from bundled fixtures (used by the demo & tests, and
  *  because the deploy sandbox may have no outbound internet access). */
 const FIXTURE_HOSTS = new Set(["example.com", "www.example.com"]);
@@ -175,19 +199,37 @@ export async function crawl(rawUrl: string): Promise<CrawlResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: {
-        "User-Agent": "TechAdvisorBot/1.0 (+product-spec-crawler)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-    });
-    if (!res.ok) {
-      return { ok: false, html: "", title: "", error: `Fetch failed: HTTP ${res.status}` };
+    // Use the page's own origin as Referer — retailers frequently 403 requests
+    // that arrive with no referer. One transparent retry (with a short backoff)
+    // absorbs the occasional first-hit block some bot filters apply.
+    const referer = `${url.protocol}//${url.host}/`;
+    const attempts = 2;
+    let lastStatus = 0;
+    for (let i = 0; i < attempts; i++) {
+      const res = await fetch(url.toString(), {
+        signal: controller.signal,
+        redirect: "follow",
+        headers: browserHeaders(referer),
+      });
+      if (res.ok) {
+        const html = await res.text();
+        return { ok: true, html, title: extractTitle(html) };
+      }
+      lastStatus = res.status;
+      // Only a transient block/rate-limit is worth retrying.
+      const retriable = res.status === 403 || res.status === 429 || res.status >= 500;
+      if (!retriable || i === attempts - 1) {
+        const hint =
+          res.status === 403
+            ? " (the site blocked automated access)"
+            : res.status === 429
+              ? " (rate limited)"
+              : "";
+        return { ok: false, html: "", title: "", error: `Fetch failed: HTTP ${res.status}${hint}` };
+      }
+      await new Promise((r) => setTimeout(r, 400));
     }
-    const html = await res.text();
-    return { ok: true, html, title: extractTitle(html) };
+    return { ok: false, html: "", title: "", error: `Fetch failed: HTTP ${lastStatus}` };
   } catch (err) {
     const msg = (err as Error).name === "AbortError" ? "Request timed out." : (err as Error).message;
     return { ok: false, html: "", title: "", error: msg };
