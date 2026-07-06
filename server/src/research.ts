@@ -7,6 +7,13 @@ import type { Product } from "./types.js";
 /** In-memory comparison store (single shared comparison; see Out of Scope). */
 export const products = new Map<string, Product>();
 
+/** Small, configurable pacing so the live "researching" indicator is visible and
+ *  the table visibly fills in real time. Set to 0 to disable in tests. */
+const INITIAL_DELAY_MS = Number(process.env.RESEARCH_INITIAL_DELAY_MS ?? 700);
+const METRIC_STAGGER_MS = Number(process.env.RESEARCH_METRIC_STAGGER_MS ?? 220);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /** Metric keys we optimistically show as "researching" until resolved/omitted. */
 const RESEARCH_KEYS = [
   "Screen Size",
@@ -37,6 +44,8 @@ export function createProduct(url: string, price: string): Product {
  */
 export async function researchProduct(io: Server, product: Product): Promise<void> {
   io.emit("product:added", { product, researchingKeys: RESEARCH_KEYS });
+
+  await sleep(INITIAL_DELAY_MS);
 
   const result = await crawl(product.url);
   if (!result.ok) {
@@ -73,6 +82,7 @@ export async function researchProduct(io: Server, product: Product): Promise<voi
     product.metrics[pair.name] = pair;
     resolvedNames.add(pair.name);
     io.emit("metric:update", { id: product.id, metric: pair, status: "resolved" });
+    await sleep(METRIC_STAGGER_MS);
   }
 
   // Mark the optimistic research keys that were NOT found as not_found so the UI
