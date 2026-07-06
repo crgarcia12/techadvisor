@@ -1,24 +1,27 @@
 {
   "name": "techadvisor",
   "version": "1.0.0",
-  "description": "Tech product advisor API",
-  "main": "src/index.js",
-  "type": "module",
+  "private": true,
+  "description": "Chat-driven, web-crawled product comparison (TVs and more).",
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "express": "^4.18.2",
-    "cheerio": "^1.0.0-rc.12",
-    "node-fetch": "^3.3.2"
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "build": "npm --workspace web run build && npm --workspace server run build",
+    "start": "npm --workspace server run start",
+    "lint": "npm --workspace server run lint && npm --workspace web run lint",
+    "test": "npm --workspace server run test",
+    "test:e2e": "cucumber-js"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
-    "supertest": "^6.3.3"
+    "@cucumber/cucumber": "^10.9.0",
+    "@playwright/test": "^1.61.1",
+    "concurrently": "^9.1.0",
+    "playwright": "^1.48.2",
+    "typescript": "^5.6.3"
   }
 }
