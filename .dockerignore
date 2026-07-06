@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.git
+.github
+.gitignore
+README.md
+.vscode
+.devcontainer
+*.md
+packages/web/node_modules
+packages/server/node_modules
+dist
+.DS_Store
