@@ -1,0 +1,27 @@
+{
+  "name": "techadvisor",
+  "version": "1.0.0",
+  "description": "Azure Foundry TechAdvisor - AI-powered technical advisory system",
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:acceptance",
+    "test:unit": "vitest run",
+    "test:acceptance": "cucumber-js tests/acceptance/features/ --require tests/acceptance/step-definitions/steps.js",
+    "dev": "node src/index.js",
+    "start": "node src/server.js",
+    "build": "echo 'Build step - placeholder for future compilation'"
+  },
+  "keywords": [
+    "azure",
+    "ai",
+    "technical-advisor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.1.0",
+    "@playwright/test": "^1.48.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {}
+}
