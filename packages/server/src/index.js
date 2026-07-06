@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from the built web app
-const webDistPath = path.join(__dirname, '../../../web/dist');
+const webDistPath = path.join(__dirname, '../../web/dist');
 app.use(express.static(webDistPath));
 
 // API health check endpoint
