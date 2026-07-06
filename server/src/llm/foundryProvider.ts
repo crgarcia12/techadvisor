@@ -27,6 +27,13 @@ export class FoundryProvider implements LlmProvider {
   private readonly apiKey = process.env.AZURE_AI_FOUNDRY_API_KEY ?? "";
 
   isConfigured(): boolean {
+    // Explicit opt-out: some deployments (e.g. the Liliput dev preview) inject
+    // Foundry credentials at the platform level but want the app to run its
+    // deterministic, offline-friendly guided flow instead. Honour that switch
+    // so the "graceful degradation" experience is what ships there.
+    if (/^(1|true|yes|on)$/i.test(process.env.TECHADVISOR_DISABLE_AI ?? "")) {
+      return false;
+    }
     return Boolean(this.endpoint && this.deployment);
   }
 

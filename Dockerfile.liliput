@@ -10,6 +10,12 @@ COPY . .
 # and Socket.IO URLs are prefixed (deploy contract rule #4/#5). nginx strips the
 # prefix before requests reach this container, so server routes stay at "/".
 ENV PUBLIC_BASE_PATH=/dev/crgarcia12/techadvisor/liliput-task-8a533163/
+# The Liliput platform injects Azure AI Foundry credentials via the
+# `liliput-azure-sp` secret (envFrom). This preview is meant to demonstrate the
+# deterministic, offline-friendly guided flow (see the "graceful handling when
+# Azure AI Foundry is not configured" acceptance scenario), so force the
+# rule-based responder here rather than making live LLM calls.
+ENV TECHADVISOR_DISABLE_AI=true
 RUN npm run build
 ENV PORT=8080
 EXPOSE 8080
