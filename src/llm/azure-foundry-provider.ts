@@ -1,4 +1,4 @@
-import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
+import { AzureOpenAI } from 'openai';
 
 export interface LLMProvider {
   isConfigured(): boolean;
@@ -7,21 +7,24 @@ export interface LLMProvider {
 }
 
 export class AzureFoundryProvider implements LLMProvider {
-  private client: OpenAIClient | null = null;
+  private client: AzureOpenAI | null = null;
   private endpoint: string | undefined;
   private apiKey: string | undefined;
+  private deploymentId: string;
   private configured: boolean = false;
 
   constructor() {
     this.endpoint = process.env.AZURE_FOUNDRY_ENDPOINT;
     this.apiKey = process.env.AZURE_FOUNDRY_API_KEY;
+    this.deploymentId = process.env.AZURE_FOUNDRY_DEPLOYMENT_ID || 'gpt-4';
 
     if (this.endpoint && this.apiKey) {
       try {
-        this.client = new OpenAIClient(
-          this.endpoint,
-          new AzureKeyCredential(this.apiKey)
-        );
+        this.client = new AzureOpenAI({
+          endpoint: this.endpoint,
+          apiKey: this.apiKey,
+          apiVersion: '2024-10-21',
+        });
         this.configured = true;
       } catch (error) {
         console.error('Failed to initialize Azure AI Foundry client:', error);
@@ -53,7 +56,7 @@ export class AzureFoundryProvider implements LLMProvider {
     }
 
     try {
-      const messages: Array<{ role: string; content: string }> = [];
+      const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
       
       if (context && context.length > 0) {
         context.forEach((ctx, idx) => {
@@ -64,9 +67,12 @@ export class AzureFoundryProvider implements LLMProvider {
       
       messages.push({ role: 'user', content: prompt });
 
-      const deploymentId = process.env.AZURE_FOUNDRY_DEPLOYMENT_ID || 'gpt-4';
-      
-      const result = await this.client.getChatCompletions(deploymentId, messages);
+      const result = await this.client.chat.completions.create({
+        model: this.deploymentId,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 500,
+      });
 
       const choice = result.choices[0];
       if (!choice || !choice.message) {

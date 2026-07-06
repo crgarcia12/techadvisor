@@ -1,7 +1,7 @@
-import { ClarifyingChat } from '../clarifying-chat';
-import { AzureFoundryProvider } from '../../llm/azure-foundry-provider';
+import { ClarifyingChat } from './clarifying-chat';
+import { AzureFoundryProvider } from '../llm/azure-foundry-provider';
 
-jest.mock('../../llm/azure-foundry-provider');
+jest.mock('../llm/azure-foundry-provider');
 
 describe('ClarifyingChat', () => {
   let chat: ClarifyingChat;
@@ -109,9 +109,9 @@ describe('ClarifyingChat', () => {
       // The response should be a specific question, not open-ended
       expect(response).toBeDefined();
       expect(response.length).toBeGreaterThan(0);
-      expect(mockProvider.generate).toHaveBeenCalledWith(
-        expect.stringContaining('narrowing')
-      );
+      // Check that the generate method was called with a prompt containing NARROWING
+      const callArgs = mockProvider.generate.mock.calls[0];
+      expect(callArgs[0]).toContain('NARROWING');
     });
   });
 });

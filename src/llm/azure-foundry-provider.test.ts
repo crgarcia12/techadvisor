@@ -1,4 +1,4 @@
-import { AzureFoundryProvider } from '../azure-foundry-provider';
+import { AzureFoundryProvider } from './azure-foundry-provider';
 
 describe('AzureFoundryProvider', () => {
   let originalEnv: NodeJS.ProcessEnv;

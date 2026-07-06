@@ -1,16 +1,21 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AzureFoundryProvider = void 0;
-const openai_1 = require("@azure/openai");
+const openai_1 = require("openai");
 class AzureFoundryProvider {
     constructor() {
         this.client = null;
         this.configured = false;
         this.endpoint = process.env.AZURE_FOUNDRY_ENDPOINT;
         this.apiKey = process.env.AZURE_FOUNDRY_API_KEY;
+        this.deploymentId = process.env.AZURE_FOUNDRY_DEPLOYMENT_ID || 'gpt-4';
         if (this.endpoint && this.apiKey) {
             try {
-                this.client = new openai_1.OpenAIClient(this.endpoint, new openai_1.AzureKeyCredential(this.apiKey));
+                this.client = new openai_1.AzureOpenAI({
+                    endpoint: this.endpoint,
+                    apiKey: this.apiKey,
+                    apiVersion: '2024-10-21',
+                });
                 this.configured = true;
             }
             catch (error) {
@@ -44,8 +49,12 @@ class AzureFoundryProvider {
                 });
             }
             messages.push({ role: 'user', content: prompt });
-            const deploymentId = process.env.AZURE_FOUNDRY_DEPLOYMENT_ID || 'gpt-4';
-            const result = await this.client.getChatCompletions(deploymentId, messages);
+            const result = await this.client.chat.completions.create({
+                model: this.deploymentId,
+                messages: messages,
+                temperature: 0.7,
+                max_tokens: 500,
+            });
             const choice = result.choices[0];
             if (!choice || !choice.message) {
                 throw new Error('No response from Azure AI Foundry');

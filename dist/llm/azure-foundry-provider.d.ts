@@ -7,6 +7,7 @@ export declare class AzureFoundryProvider implements LLMProvider {
     private client;
     private endpoint;
     private apiKey;
+    private deploymentId;
     private configured;
     constructor();
     isConfigured(): boolean;

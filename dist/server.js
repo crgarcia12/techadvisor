@@ -89,7 +89,8 @@ setInterval(() => {
     }
 }, 3600000);
 // Start server - bind to 0.0.0.0 per Liliput contract
-app.listen(port, '0.0.0.0', () => {
+const portNum = typeof port === 'string' ? parseInt(port, 10) : port;
+app.listen(portNum, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${port}`);
     console.log(`LLM Provider configured: ${llmProvider.isConfigured()}`);
     if (!llmProvider.isConfigured()) {
