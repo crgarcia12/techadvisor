@@ -14,6 +14,7 @@ export interface MetricPair {
   name: string;
   value: string;
   sourceSnippet: string;
+  sourceUrl: string;
 }
 
 export interface Product {

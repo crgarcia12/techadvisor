@@ -267,6 +267,24 @@ button:hover {
   cursor: help;
 }
 
+.metric-value--link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.metric-value--link:hover {
+  text-decoration: underline;
+}
+
+.metric-source {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 /* ---- Animated "moving glasses" indicator ---- */
 .glasses {
   display: inline-flex;

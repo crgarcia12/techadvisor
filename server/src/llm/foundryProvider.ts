@@ -91,14 +91,20 @@ export class FoundryProvider implements LlmProvider {
       const json = raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1);
       const parsed = JSON.parse(json) as MetricPair[];
       const haystack = rawText.toLowerCase();
-      return parsed.filter(
-        (p) =>
-          p &&
-          p.name &&
-          p.value &&
-          p.sourceSnippet &&
-          haystack.includes(String(p.value).toLowerCase().slice(0, 24)),
-      );
+      // Re-attach the traceable sourceUrl from the original candidates by name;
+      // the LLM only reshapes name/value/snippet and must not alter provenance.
+      const urlByName = new Map(candidates.map((c) => [c.name, c.sourceUrl]));
+      return parsed
+        .map((p) => ({ ...p, sourceUrl: p?.sourceUrl || urlByName.get(p?.name) || "" }))
+        .filter(
+          (p) =>
+            p &&
+            p.name &&
+            p.value &&
+            p.sourceSnippet &&
+            p.sourceUrl &&
+            haystack.includes(String(p.value).toLowerCase().slice(0, 24)),
+        );
     } catch {
       // On any failure, fall back to the deterministic candidates untouched.
       return candidates;

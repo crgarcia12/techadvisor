@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { lookup } from "node:dns/promises";
 import net from "node:net";
+import * as cheerio from "cheerio";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 const FETCH_TIMEOUT_MS = Number(process.env.CRAWL_TIMEOUT_MS ?? 12_000);
@@ -70,6 +71,71 @@ export async function validateUrl(rawUrl) {
 function extractTitle(html) {
     const m = html.match(/<title[^>]*>([^<]*)<\/title>/i);
     return m ? m[1].trim() : "";
+}
+/**
+ * Discover the official product page from a stored (retailer) page's HTML.
+ *
+ * We only trust links already present in the crawled page — never external
+ * knowledge — so discovery is deterministic and traceable. Candidates, in
+ * priority order:
+ *   1. `<link rel="canonical">` pointing to a different host
+ *   2. Open Graph `og:url` pointing to a different host
+ *   3. anchors flagged as the manufacturer / official site
+ *
+ * Returns an absolute URL string, or null when nothing suitable is found. The
+ * returned URL is NOT yet SSRF-validated — the caller must run it through
+ * `crawl()` (which calls `validateUrl`) before fetching.
+ */
+export function discoverOfficialUrl(html, storedUrl) {
+    let base;
+    try {
+        base = new URL(storedUrl);
+    }
+    catch {
+        return null;
+    }
+    const $ = cheerio.load(html);
+    const resolve = (href) => {
+        if (!href)
+            return null;
+        try {
+            return new URL(href, base);
+        }
+        catch {
+            return null;
+        }
+    };
+    const differentPage = (u) => !!u &&
+        (u.protocol === "http:" || u.protocol === "https:") &&
+        u.toString().replace(/#.*$/, "") !== base.toString().replace(/#.*$/, "");
+    // 1. Canonical link on a different host.
+    const canonical = resolve($('link[rel="canonical"]').attr("href"));
+    if (differentPage(canonical) && canonical.hostname !== base.hostname) {
+        return canonical.toString();
+    }
+    // 2. Open Graph url on a different host.
+    const ogUrl = resolve($('meta[property="og:url"]').attr("content"));
+    if (differentPage(ogUrl) && ogUrl.hostname !== base.hostname) {
+        return ogUrl.toString();
+    }
+    // 3. Explicitly flagged official / manufacturer links.
+    let officialHref = null;
+    $("a[href]").each((_, el) => {
+        if (officialHref)
+            return;
+        const $el = $(el);
+        const rel = ($el.attr("rel") ?? "").toLowerCase();
+        const text = ($el.text() ?? "").toLowerCase();
+        const flagged = rel.includes("manufacturer") ||
+            /official (product )?(page|site|website)/.test(text) ||
+            /manufacturer('s)? (page|site|website)/.test(text);
+        if (!flagged)
+            return;
+        const u = resolve($el.attr("href"));
+        if (differentPage(u))
+            officialHref = u.toString();
+    });
+    return officialHref;
 }
 async function readFixture(url) {
     const segment = url.pathname.split("/").filter(Boolean).pop() ?? "";

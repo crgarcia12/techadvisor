@@ -53,7 +53,7 @@ function snippet(label: string, value: string): string {
  * Every returned pair carries a `sourceSnippet` copied from the page, so callers
  * can discard anything not traceable to crawled content.
  */
-export function extractMetricsFromHtml(html: string): MetricPair[] {
+export function extractMetricsFromHtml(html: string, sourceUrl = ""): MetricPair[] {
   const $ = cheerio.load(html);
   const found = new Map<string, MetricPair>();
 
@@ -64,7 +64,7 @@ export function extractMetricsFromHtml(html: string): MetricPair[] {
     const name = canonicalName(label);
     if (!name) return;
     if (found.has(name)) return; // first traceable value wins
-    found.set(name, { name, value, sourceSnippet: snippet(label, value) });
+    found.set(name, { name, value, sourceSnippet: snippet(label, value), sourceUrl });
   };
 
   // 1. JSON-LD structured data
@@ -118,4 +118,27 @@ export function extractMetricsFromHtml(html: string): MetricPair[] {
   });
 
   return [...found.values()];
+}
+
+/**
+ * Merge metric pairs extracted from multiple sources (the user-provided stored
+ * page and the auto-discovered official product page) into a single set.
+ *
+ * Sources are considered in order — earlier sources win for a given metric, so
+ * pass the higher-trust source first. Metrics found ONLY in a later source are
+ * added, which is how the official page contributes the extra specs the stored
+ * page omits. Every returned pair keeps the `sourceUrl` of the page it came
+ * from, so the UI can link each spec value back to its origin. Entries lacking
+ * a traceable source (no snippet or no url) are dropped.
+ */
+export function mergeMetricSources(sources: MetricPair[][]): MetricPair[] {
+  const merged = new Map<string, MetricPair>();
+  for (const pairs of sources) {
+    for (const p of pairs) {
+      if (!p || !p.name || !p.value || !p.sourceSnippet || !p.sourceUrl) continue;
+      if (merged.has(p.name)) continue; // earlier source wins
+      merged.set(p.name, p);
+    }
+  }
+  return [...merged.values()];
 }

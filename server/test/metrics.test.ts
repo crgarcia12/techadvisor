@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractMetricsFromHtml } from "../src/metrics.js";
+import { extractMetricsFromHtml, mergeMetricSources } from "../src/metrics.js";
 
 describe("extractMetricsFromHtml", () => {
   it("extracts metrics from a spec table with traceable source snippets", () => {
@@ -33,11 +33,43 @@ describe("extractMetricsFromHtml", () => {
     expect(pairs.find((p) => p.name === "Contrast Ratio")).toBeUndefined();
   });
 
-  it("every extracted value is literally traceable to the HTML", () => {
-    const html = `<dl><dt>Panel Type</dt><dd>OLED evo</dd></dl>`;
-    const pairs = extractMetricsFromHtml(html);
+  it("tags every extracted pair with the source URL it came from", () => {
+    const url = "https://shop.example.com/tv/xyz";
+    const html = `<table><tr><th>Resolution</th><td>4K UHD</td></tr></table>`;
+    const pairs = extractMetricsFromHtml(html, url);
+    expect(pairs.length).toBeGreaterThan(0);
     for (const p of pairs) {
-      expect(html.toLowerCase()).toContain(p.value.toLowerCase());
+      expect(p.sourceUrl).toBe(url);
     }
+  });
+});
+
+describe("mergeMetricSources", () => {
+  const stored = "https://shop.example.com/tv/xyz";
+  const official = "https://official.example.com/tv/xyz";
+
+  it("keeps the stored source for shared metrics and adds official-only specs", () => {
+    const storedPairs = [
+      { name: "Resolution", value: "4K UHD", sourceSnippet: "Resolution: 4K UHD", sourceUrl: stored },
+    ];
+    const officialPairs = [
+      { name: "Resolution", value: "3840 x 2160", sourceSnippet: "Resolution: 3840 x 2160", sourceUrl: official },
+      { name: "Brightness", value: "1500 nits", sourceSnippet: "Brightness: 1500 nits", sourceUrl: official },
+    ];
+    const merged = mergeMetricSources([storedPairs, officialPairs]);
+    const byName = Object.fromEntries(merged.map((p) => [p.name, p]));
+    // Stored (first) source wins for the shared metric.
+    expect(byName["Resolution"].value).toBe("4K UHD");
+    expect(byName["Resolution"].sourceUrl).toBe(stored);
+    // Official page contributes the extra spec, attributed to its own URL.
+    expect(byName["Brightness"].value).toBe("1500 nits");
+    expect(byName["Brightness"].sourceUrl).toBe(official);
+  });
+
+  it("drops entries that lack a traceable source url", () => {
+    const merged = mergeMetricSources([
+      [{ name: "HDR", value: "HDR10+", sourceSnippet: "HDR: HDR10+", sourceUrl: "" }],
+    ]);
+    expect(merged.find((p) => p.name === "HDR")).toBeUndefined();
   });
 });

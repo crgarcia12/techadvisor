@@ -5,6 +5,8 @@ export interface MetricPair {
   value: string;
   /** Exact text snippet from the crawled page proving the value. Required. */
   sourceSnippet: string;
+  /** URL of the page this value was extracted from. Required. */
+  sourceUrl: string;
 }
 
 export type MetricStatus = "researching" | "resolved" | "not_found";

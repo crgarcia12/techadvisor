@@ -103,9 +103,25 @@ export function ComparisonTable({ products, researching }: Props) {
                   return (
                     <td key={p.id} data-testid={`cell-${p.id}-${name}`} className="ctable__cell">
                       {metric ? (
-                        <span className="metric-value" title={metric.sourceSnippet}>
-                          {metric.value}
-                        </span>
+                        metric.sourceUrl ? (
+                          <a
+                            className="metric-value metric-value--link"
+                            href={metric.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`${metric.sourceSnippet}\nSource: ${metric.sourceUrl}`}
+                            data-testid={`source-${p.id}-${name}`}
+                          >
+                            {metric.value}
+                            <span className="metric-source" aria-hidden="true">
+                              ↗
+                            </span>
+                          </a>
+                        ) : (
+                          <span className="metric-value" title={metric.sourceSnippet}>
+                            {metric.value}
+                          </span>
+                        )
                       ) : busy ? (
                         <Glasses />
                       ) : (

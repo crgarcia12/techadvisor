@@ -1,8 +1,8 @@
 import type { Server } from "socket.io";
-import { crawl } from "./crawl/crawler.js";
-import { extractMetricsFromHtml } from "./metrics.js";
+import { crawl, discoverOfficialUrl } from "./crawl/crawler.js";
+import { extractMetricsFromHtml, mergeMetricSources } from "./metrics.js";
 import { getLlmProvider } from "./llm/index.js";
-import type { Product } from "./types.js";
+import type { MetricPair, Product } from "./types.js";
 
 /** In-memory comparison store (single shared comparison; see Out of Scope). */
 export const products = new Map<string, Product>();
@@ -39,43 +39,74 @@ export function createProduct(url: string, price: string): Product {
 }
 
 /**
+ * Extract source-attributed metrics from an already-crawled page's HTML. Runs
+ * the deterministic HTML extractor (tagging every pair with `sourceUrl`) and,
+ * when an LLM is configured, an optional normalisation pass that only reshapes
+ * values already present in the page.
+ */
+async function extractFromHtml(html: string, sourceUrl: string): Promise<MetricPair[]> {
+  let pairs = extractMetricsFromHtml(html, sourceUrl);
+
+  const provider = getLlmProvider();
+  if (provider.isConfigured() && pairs.length > 0) {
+    try {
+      pairs = await provider.extractMetrics(html.replace(/<[^>]+>/g, " "), pairs);
+    } catch {
+      /* keep deterministic pairs */
+    }
+  }
+  return pairs;
+}
+
+/**
  * Crawl the product page, extract real metrics from the crawled HTML only, then
  * stream results over Socket.IO. Never fabricates values.
+ *
+ * Two sources are consulted per product: the user-provided stored URL, plus an
+ * auto-discovered official product page (derived from links in the stored page)
+ * which typically publishes many more specs. Each extracted spec keeps a
+ * `sourceUrl` pointing at the exact page it came from. When official-page
+ * discovery finds nothing — or the official page fails to crawl — the stored
+ * page's metrics are used on their own (graceful degradation).
  */
 export async function researchProduct(io: Server, product: Product): Promise<void> {
   io.emit("product:added", { product, researchingKeys: RESEARCH_KEYS });
 
   await sleep(INITIAL_DELAY_MS);
 
-  const result = await crawl(product.url);
-  if (!result.ok) {
+  const storedResult = await crawl(product.url);
+  if (!storedResult.ok) {
     product.status = "error";
-    product.error = result.error;
+    product.error = storedResult.error;
     products.set(product.id, product);
-    io.emit("product:error", { id: product.id, error: result.error, researchingKeys: RESEARCH_KEYS });
+    io.emit("product:error", { id: product.id, error: storedResult.error, researchingKeys: RESEARCH_KEYS });
     return;
   }
 
-  if (result.title) {
-    product.title = result.title;
-    io.emit("product:title", { id: product.id, title: result.title });
+  if (storedResult.title) {
+    product.title = storedResult.title;
+    io.emit("product:title", { id: product.id, title: storedResult.title });
   }
 
-  // Deterministic extraction from crawled HTML — the source of truth.
-  let pairs = extractMetricsFromHtml(result.html);
+  // Source 1: the user-provided stored page.
+  const storedPairs = await extractFromHtml(storedResult.html, product.url);
 
-  // Optional LLM normalisation (only reshapes values already in the page).
-  const provider = getLlmProvider();
-  if (provider.isConfigured() && pairs.length > 0) {
-    try {
-      pairs = await provider.extractMetrics(result.html.replace(/<[^>]+>/g, " "), pairs);
-    } catch {
-      /* keep deterministic pairs */
+  // Source 2: the auto-discovered official product page (extra specs).
+  let officialPairs: MetricPair[] = [];
+  const officialUrl = discoverOfficialUrl(storedResult.html, product.url);
+  if (officialUrl) {
+    const official = await crawl(officialUrl);
+    if (official.ok) {
+      officialPairs = await extractFromHtml(official.html, officialUrl);
     }
   }
 
-  // Guard: discard anything lacking a traceable source snippet.
-  pairs = pairs.filter((p) => p && p.name && p.value && p.sourceSnippet);
+  // Stored (user-provided) source wins per metric; the official page fills in
+  // the specs the stored page did not list.
+  let pairs = mergeMetricSources([storedPairs, officialPairs]);
+
+  // Guard: discard anything lacking a traceable source snippet or url.
+  pairs = pairs.filter((p) => p && p.name && p.value && p.sourceSnippet && p.sourceUrl);
 
   const resolvedNames = new Set<string>();
   for (const pair of pairs) {
