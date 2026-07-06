@@ -31,11 +31,6 @@ COPY --from=builder /app/dist ./dist
 # Copy public static files
 COPY public ./public
 
-# Create a non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-RUN chown -R appuser:appuser /app
-USER appuser
-
 # Expose port (the actual port is set via $PORT environment variable)
 EXPOSE 3000
 
